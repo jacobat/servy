@@ -1,118 +1,112 @@
 defmodule Servy.Handler do
+
+  alias Servy.Conv
+
+  @moduledoc "Handles HTTP requests"
+
+  @pages_path Path.expand("../../pages", __DIR__)
+
+  @doc "Transforms the request into a response."
   def handle(request) do
     request
-    |> parse
+    |> Servy.Parser.parse
+    |> Servy.Plugins.rewrite_path
     |> IO.inspect
     |> route
+    |> Servy.Plugins.track
     |> format_response
   end
 
-  def parse(request) do
-    [method, path, _] =
-      request
-      |> String.split("\n")
-      |> List.first
-      |> String.split(" ")
-
-    %{
-      method: method,
-      path: path,
-      resp_body: "",
-      status: nil
-    }
-  end
-
-  def route(conv) do
-    route(conv, conv.method, conv.path)
-  end
-
-  def route(conv, "GET", "/wildthings") do
+  def route(%Conv{ method: "GET", path: "/wildthings" } = conv) do
     %{ conv | status: 200, resp_body: "Bears, Lions, Tigers" }
   end
 
-  def route(conv, "GET", "/bears") do
+  def route(%Conv{ method: "GET", path: "/bears" } = conv) do
     %{ conv | status: 200, resp_body: "Teddy, Smokey, Paddington" }
   end
 
-  def route(conv, "GET", "/bears/" <> id) do
+  def route(%Conv{ method: "GET", path: "/bears/new" } = conv) do
+    Path.expand("../../pages", __DIR__)
+    |> Path.join("form.html")
+    |> File.read
+    |> Servy.FileHandler.handle_file(conv)
+  end
+
+  def route(%Conv{ method: "GET", path: "/bears/" <> id } = conv) do
     %{ conv | status: 200, resp_body: "Bear #{id}" }
   end
 
-  def route(conv, _method, path) do
+  def route(%Conv{ method: "GET", path: "/about" } = conv) do
+    @pages_path
+    |> Path.join("about.html")
+    |> File.read
+    |> Servy.FileHandler.handle_file(conv)
+  end
+
+  def route(%Conv{ path: path } = conv) do
     %{ conv | status: 404, resp_body: "No #{path} here!" }
   end
 
-  def format_response(conv) do
+  def format_response(%Conv{} = conv) do
     """
-    HTTP/1.1 #{conv.status} #{status_reason(conv.status)}
+    HTTP/1.1 #{Conv.full_status(conv)}
     Content-Type: text/html
     Content-Length: #{byte_size(conv.resp_body)}
 
     #{conv.resp_body}
     """
   end
-
-  defp status_reason(code) do
-    %{
-      200 => "OK",
-      201 => "Created",
-      401 => "Unauthorized",
-      403 => "Forbidden",
-      404 => "Not found",
-      500 => "Internal Server Error"
-    }[code]
-  end
 end
 
 # GET /wildthings
 
-request = """
-GET /wildthings HTTP/1.1
-Host: example.com
-User-Agent: ExampleBrowser/1.0
-Accept: */*
-
-"""
-
-response = Servy.Handler.handle(request)
-IO.puts response
+# request = """
+# GET /wildthings HTTP/1.1
+# Host: example.com
+# User-Agent: ExampleBrowser/1.0
+# Accept: */*
+#
+# """
+#
+# response = Servy.Handler.handle(request)
+# IO.puts response
 
 # # GET /bears
 #
-request = """
-GET /bears HTTP/1.1
-Host: example.com
-User-Agent: ExampleBrowser/1.0
-Accept: */*
-
-"""
-response = Servy.Handler.handle(request)
-IO.puts response
+# request = """
+# GET /bears HTTP/1.1
+# Host: example.com
+# User-Agent: ExampleBrowser/1.0
+# Accept: */*
+#
+# """
+# response = Servy.Handler.handle(request)
+# IO.puts response
 
 #
 # # GET /bigfoot
 #
-request = """
-GET /bigfoot HTTP/1.1
-Host: example.com
-User-Agent: ExampleBrowser/1.0
-Accept: */*
-
-"""
-response = Servy.Handler.handle(request)
-IO.puts response
+# request = """
+# GET /bigfoot HTTP/1.1
+# Host: example.com
+# User-Agent: ExampleBrowser/1.0
+# Accept: */*
+#
+# """
+# response = Servy.Handler.handle(request)
+# IO.puts response
 #
 # # GET /bears/1
 #
-request = """
-GET /bears/1 HTTP/1.1
-Host: example.com
-User-Agent: ExampleBrowser/1.0
-Accept: */*
-
-"""
-response = Servy.Handler.handle(request)
-IO.puts response
+# request = """
+# GET /bears/1 HTTP/1.1
+# Host: example.com
+# User-Agent: ExampleBrowser/1.0
+# Accept: */*
+#
+# """
+# response = Servy.Handler.handle(request)
+# IO.puts response
 #
 # # GET /wildlife
 #
@@ -123,14 +117,17 @@ IO.puts response
 # Accept: */*
 #
 # """
+
 #
 # # GET /about
 #
-# request = """
-# GET /about HTTP/1.1
-# Host: example.com
-# User-Agent: ExampleBrowser/1.0
-# Accept: */*
+request = """
+GET /bears/new HTTP/1.1
+Host: example.com
+User-Agent: ExampleBrowser/1.0
+Accept: */*
+
+"""
 #
-# """
-#
+response = Servy.Handler.handle(request)
+IO.puts response
